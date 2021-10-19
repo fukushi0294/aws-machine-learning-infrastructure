@@ -1,0 +1,31 @@
+{
+  "name": "aws-machine-learning-infrastructure",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky install"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "terraform fmt && git add ."
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fukushi0294/aws-machine-learning-infrastructure.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fukushi0294/aws-machine-learning-infrastructure/issues"
+  },
+  "homepage": "https://github.com/fukushi0294/aws-machine-learning-infrastructure#readme",
+  "dependencies": {
+    "husky": "^7.0.2"
+  },
+  "devDependencies": {
+    "husky": "^7.0.0"
+  }
+}
