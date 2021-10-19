@@ -1,4 +1,9 @@
 terraform {
+  backend "s3" {
+    bucket = "aws-ml-remote-state"
+    key    = "src"
+    region = "ap-northeast-1"
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -12,10 +17,11 @@ provider "aws" {
   profile = "default"
 }
 
-resource "aws_s3_bucket" "remote_state" {
-  bucket = "aws-ml-remote-state"
+resource "aws_s3_bucket" "hdfs" {
+  bucket = "aws-ml-hdfs"
   acl    = "private"
   versioning {
     enabled = true
   }
 }
+
