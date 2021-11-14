@@ -31,3 +31,9 @@ module "network" {
   public_cidr_block  = "10.0.1.0/24"
   private_cidr_block = "10.0.2.0/24"
 }
+
+module "compute" {
+  source            = "./compute"
+  vpc_id            = module.network.vpc_id
+  private_subnet_id = module.network.subnet_id.private
+}
