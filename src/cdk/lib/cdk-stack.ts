@@ -3,9 +3,6 @@ import * as ec2 from '@aws-cdk/aws-ec2';
 import * as eks from '@aws-cdk/aws-eks';
 import * as iam from '@aws-cdk/aws-iam';
 import * as emrcontainers from '@aws-cdk/aws-emrcontainers';
-import * as yaml from 'js-yaml';
-import path = require('path');
-import fs = require('fs');
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -42,10 +39,27 @@ export class CdkStack extends cdk.Stack {
       mainCluster.awsAuth.addUserMapping(clusterAdimnUser, { groups: [ 'system:masters' ]});
     });
 
-    const emrRoleText = fs.readFileSync(path.resolve(__dirname, "./manifest/role.yaml"), 'utf8');
-    const emrRole = mainCluster.addManifest('EMRRole', yaml.loadAll(emrRoleText));
-    const emrRoleBindingText =  fs.readFileSync(path.resolve(__dirname, "./manifest/rolebinding.yaml"), 'utf8');
-    const emrRoleBinding = mainCluster.addManifest('EMRRoleBinding', yaml.loadAll(emrRoleBindingText));
+    const emrRole = mainCluster.addManifest('EMRRole', {
+      apiVersion:"rbac.authorization.k8s.io/v1",
+      kind:"Role",
+      metadata:{name: "emr-containers", namespace: "default"},
+      rules: [
+          {apiGroups: [""], resources:["namespaces"],verbs:["get"]},
+          {apiGroups: [""], resources:["serviceaccounts", "services", "configmaps", "events", "pods", "pods/log"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "deletecollection", "annotate", "patch", "label"]},
+          {apiGroups: [""], resources:["secrets"],verbs:["create", "patch", "delete", "watch"]},
+          {apiGroups: ["apps"], resources:["statefulsets", "deployments"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
+          {apiGroups: ["batch"], resources:["jobs"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
+          {apiGroups: ["extensions"], resources:["ingresses"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
+          {apiGroups: ["rbac.authorization.k8s.io"], resources:["roles", "rolebindings"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "deletecollection", "annotate", "patch", "label"]}
+      ]
+    });
+    const emrRoleBinding = mainCluster.addManifest('EMRRoleBinding',  {
+      apiVersion:"rbac.authorization.k8s.io/v1",
+      kind:"RoleBinding",
+      metadata:{name: "emr-containers", namespace: "default"},
+      subjects:[{kind: "User",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}],
+      roleRef:{kind:"Role",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}
+    });
     emrRoleBinding.node.addDependency(emrRole);
 
     const emrServiceRoleArn = `arn:aws:iam::${this.account}:role/AWSServiceRoleForAmazonEMRContainers`
@@ -65,10 +79,11 @@ export class CdkStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName("CloudWatchFullAccess")
       ]
     });
+    
     jobRole.assumeRolePolicy?.addStatements(new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["sts:AssumeRoleWithWebIdentity"],
-        principals: [new iam.OpenIdConnectPrincipal(mainCluster.openIdConnectProvider, {
+        principals: [new iam.WebIdentityPrincipal(`arn:aws:iam::${this.account}:oidc-provider/${mainCluster.clusterOpenIdConnectIssuer}`, {
           StringLike: new cdk.CfnJson(this, 'ConditionJsonAud', {
             value: {
               [`${mainCluster.clusterOpenIdConnectIssuer}:aud`] : "sts.amazon.com"
