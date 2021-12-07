@@ -13,7 +13,8 @@ export class CdkStack extends cdk.Stack {
     const cluserAdminUsers = this.node.tryGetContext('eks_admin') as string[]
     const compute = new ComputeStack(this, 'ComputeResource', {
       vpc: network.vpc,
-      emrNamespace: 'default',
+      sparkNamespace: 'spark',
+      sparkJobNamespace: 'spark-job',
       clusterAdmin: cluserAdminUsers
     })
 
