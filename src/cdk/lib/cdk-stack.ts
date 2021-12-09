@@ -14,7 +14,6 @@ export class CdkStack extends cdk.Stack {
     const compute = new ComputeStack(this, 'ComputeResource', {
       vpc: network.vpc,
       sparkNamespace: 'spark',
-      sparkJobNamespace: 'spark-job',
       clusterAdmin: cluserAdminUsers
     })
 

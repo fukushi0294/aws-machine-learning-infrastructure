@@ -8,7 +8,6 @@ interface ComputeStackProps extends cdk.NestedStackProps {
   vpc: ec2.IVpc
   clusterAdmin: string[]
   sparkNamespace: string
-  sparkJobNamespace: string
 }
 
 export class ComputeStack extends cdk.NestedStack {
@@ -27,25 +26,17 @@ export class ComputeStack extends cdk.NestedStack {
       }
     );
 
-    mainCluster.addManifest('SparkNamespace', {
-      apiVersion:"v1",
-      kind:"Namespace",
-      metadata:{name: props.sparkNamespace},
-    });
-    mainCluster.addManifest('SparkJobNamespace', {
-      apiVersion:"v1",
-      kind:"Namespace",
-      metadata:{name: props.sparkJobNamespace},
-    });
-
-    mainCluster.addFargateProfile('FgProfile', {
-      selectors: [ { namespace: props.sparkJobNamespace } ],
-    });
     props.clusterAdmin.forEach(user=> {
       const clusterAdimnUser = iam.User.fromUserAttributes(this, 'ClusterAdminUser', {
         userArn: `arn:aws:iam::${this.account}:user/${user}`,
       });
       mainCluster.awsAuth.addUserMapping(clusterAdimnUser, { groups: [ 'system:masters' ]});
+    });
+
+    const sparkNS = mainCluster.addManifest('SparkNamespace', {
+      apiVersion:"v1",
+      kind:"Namespace",
+      metadata:{name: props.sparkNamespace},
     });
 
     const emrRole = mainCluster.addManifest('EMRRole', {
@@ -62,20 +53,7 @@ export class ComputeStack extends cdk.NestedStack {
           {apiGroups: ["rbac.authorization.k8s.io"], resources:["roles", "rolebindings"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "deletecollection", "annotate", "patch", "label"]}
       ]
     });
-    const emrJobRole = mainCluster.addManifest('EMRFargateRole', {
-      apiVersion:"rbac.authorization.k8s.io/v1",
-      kind:"Role",
-      metadata:{name: "emr-containers", namespace: props.sparkJobNamespace},
-      rules: [
-          {apiGroups: [""], resources:["namespaces"],verbs:["get"]},
-          {apiGroups: [""], resources:["serviceaccounts", "services", "configmaps", "events", "pods", "pods/log"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "deletecollection", "annotate", "patch", "label"]},
-          {apiGroups: [""], resources:["secrets"],verbs:["create", "patch", "delete", "watch"]},
-          {apiGroups: ["apps"], resources:["statefulsets", "deployments"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
-          {apiGroups: ["batch"], resources:["jobs"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
-          {apiGroups: ["extensions"], resources:["ingresses"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "annotate", "patch", "label"]},
-          {apiGroups: ["rbac.authorization.k8s.io"], resources:["roles", "rolebindings"],verbs:["get", "list", "watch", "describe", "create", "edit", "delete", "deletecollection", "annotate", "patch", "label"]}
-      ]
-    });
+    emrRole.node.addDependency(sparkNS);
     const emrRoleBinding = mainCluster.addManifest('EMRRoleBinding',  {
       apiVersion:"rbac.authorization.k8s.io/v1",
       kind:"RoleBinding",
@@ -83,15 +61,7 @@ export class ComputeStack extends cdk.NestedStack {
       subjects:[{kind: "User",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}],
       roleRef:{kind:"Role",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}
     });
-    const emrJobRoleBinding = mainCluster.addManifest('EMRRoleBinding',  {
-      apiVersion:"rbac.authorization.k8s.io/v1",
-      kind:"RoleBinding",
-      metadata:{name: "emr-containers", namespace: props.sparkJobNamespace},
-      subjects:[{kind: "User",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}],
-      roleRef:{kind:"Role",name:"emr-containers",apiGroup: "rbac.authorization.k8s.io"}
-    });
     emrRoleBinding.node.addDependency(emrRole);
-    emrJobRoleBinding.node.addDependency(emrJobRole)
 
     const emrServiceRoleArn = `arn:aws:iam::${this.account}:role/AWSServiceRoleForAmazonEMRContainers`
     const emrSvcRole = iam.Role.fromRoleArn(this, 'EmrSvcRole', emrServiceRoleArn, {
@@ -141,18 +111,6 @@ export class ComputeStack extends cdk.NestedStack {
       },
       name: 'EMRCluster',
     });
-    
-    const cfnFargateVirtualCluster = new emrcontainers.CfnVirtualCluster(this, 'EMRFargateCluster', {
-      containerProvider: {
-        id: mainCluster.clusterName,
-        info: {
-          eksInfo: {
-            namespace: props.sparkJobNamespace,
-          },
-        },
-        type: 'EKS',
-      },
-      name: 'EMRFargateCluster',
-    });
+    cfnVirtualCluster.node.addDependency(sparkNS, emrRoleBinding);
   }
 }
