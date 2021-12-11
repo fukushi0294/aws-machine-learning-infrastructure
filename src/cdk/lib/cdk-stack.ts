@@ -1,7 +1,7 @@
 import * as cdk from '@aws-cdk/core';
 import { NetworkStack } from './network';
-import { ComputeStack } from './compute';
-import { EMRStudioStack } from './compute/emr';
+import { ComputeStack } from './compute/cluster';
+import { EMRStudioStack } from './compute/emr-studio';
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
