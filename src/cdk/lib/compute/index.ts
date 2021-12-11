@@ -11,12 +11,14 @@ interface ComputeStackProps extends cdk.NestedStackProps {
 }
 
 export class ComputeStack extends cdk.NestedStack {
-  public readonly vpc: ec2.IVpc
+  public readonly mainCluster: eks.Cluster
+  public readonly sparkExecutionJobRole : iam.Role
+  public readonly emrVirtualCluster: emrcontainers.CfnVirtualCluster
 
   constructor(scope: cdk.Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
 
-    const mainCluster = new eks.Cluster(
+    this.mainCluster = new eks.Cluster(
       this, 'MainCluster', {
           version: eks.KubernetesVersion.V1_21,
           vpc: props.vpc,
@@ -30,16 +32,16 @@ export class ComputeStack extends cdk.NestedStack {
       const clusterAdimnUser = iam.User.fromUserAttributes(this, 'ClusterAdminUser', {
         userArn: `arn:aws:iam::${this.account}:user/${user}`,
       });
-      mainCluster.awsAuth.addUserMapping(clusterAdimnUser, { groups: [ 'system:masters' ]});
+      this.mainCluster.awsAuth.addUserMapping(clusterAdimnUser, { groups: [ 'system:masters' ]});
     });
 
-    const sparkNS = mainCluster.addManifest('SparkNamespace', {
+    const sparkNS = this.mainCluster.addManifest('SparkNamespace', {
       apiVersion:"v1",
       kind:"Namespace",
       metadata:{name: props.sparkNamespace},
     });
 
-    const emrRole = mainCluster.addManifest('EMRRole', {
+    const emrRole = this.mainCluster.addManifest('EMRRole', {
       apiVersion:"rbac.authorization.k8s.io/v1",
       kind:"Role",
       metadata:{name: "emr-containers", namespace: props.sparkNamespace},
@@ -54,7 +56,7 @@ export class ComputeStack extends cdk.NestedStack {
       ]
     });
     emrRole.node.addDependency(sparkNS);
-    const emrRoleBinding = mainCluster.addManifest('EMRRoleBinding',  {
+    const emrRoleBinding = this.mainCluster.addManifest('EMRRoleBinding',  {
       apiVersion:"rbac.authorization.k8s.io/v1",
       kind:"RoleBinding",
       metadata:{name: "emr-containers", namespace: props.sparkNamespace},
@@ -67,11 +69,11 @@ export class ComputeStack extends cdk.NestedStack {
     const emrSvcRole = iam.Role.fromRoleArn(this, 'EmrSvcRole', emrServiceRoleArn, {
       mutable: false
     });
-    mainCluster.awsAuth.addRoleMapping(emrSvcRole, {
+    this.mainCluster.awsAuth.addRoleMapping(emrSvcRole, {
       groups: [],
       username: 'emr-containers'
     });
-    const jobRole = new iam.Role(this, "EMR_EKS_Job_Role", {
+    this.sparkExecutionJobRole = new iam.Role(this, "EMR_EKS_Job_Role", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonS3FullAccess"),
@@ -81,27 +83,27 @@ export class ComputeStack extends cdk.NestedStack {
       ]
     });
 
-    jobRole.assumeRolePolicy?.addStatements(new iam.PolicyStatement({
+    this.sparkExecutionJobRole.assumeRolePolicy?.addStatements(new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["sts:AssumeRoleWithWebIdentity"],
-        principals: [new iam.WebIdentityPrincipal(`arn:aws:iam::${this.account}:oidc-provider/${mainCluster.clusterOpenIdConnectIssuer}`, {
+        principals: [new iam.WebIdentityPrincipal(`arn:aws:iam::${this.account}:oidc-provider/${this.mainCluster.clusterOpenIdConnectIssuer}`, {
           StringLike: new cdk.CfnJson(this, 'ConditionJson', {
             value: {
-              [`${mainCluster.clusterOpenIdConnectIssuer}:sub`] : `system:serviceaccount:emr:emr-containers-sa-*-*-${this.account}-*`
+              [`${this.mainCluster.clusterOpenIdConnectIssuer}:sub`] : `system:serviceaccount:emr:emr-containers-sa-*-*-${this.account}-*`
             }
           }),
           StringEquals: new cdk.CfnJson(this, 'ConditionJsonAud', {
             value: {
-              [`${mainCluster.clusterOpenIdConnectIssuer}:aud`] : "sts.amazon.com"
+              [`${this.mainCluster.clusterOpenIdConnectIssuer}:aud`] : "sts.amazon.com"
             }
           })
         })]
       })
     );
 
-    const cfnVirtualCluster = new emrcontainers.CfnVirtualCluster(this, 'EMRCluster', {
+    this.emrVirtualCluster = new emrcontainers.CfnVirtualCluster(this, 'EMRCluster', {
       containerProvider: {
-        id: mainCluster.clusterName,
+        id: this.mainCluster.clusterName,
         info: {
           eksInfo: {
             namespace: props.sparkNamespace,
@@ -111,6 +113,6 @@ export class ComputeStack extends cdk.NestedStack {
       },
       name: 'EMRCluster',
     });
-    cfnVirtualCluster.node.addDependency(sparkNS, emrRoleBinding);
+    this.emrVirtualCluster.node.addDependency(sparkNS, emrRoleBinding);
   }
 }

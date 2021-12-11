@@ -28,5 +28,17 @@ export class NetworkStack extends cdk.NestedStack {
         },
       ],
     });
+
+    const emrEndpoint = new ec2.InterfaceVpcEndpoint(this, 'EMREndpoint', {
+      vpc: this.vpc,
+      service: new ec2.InterfaceVpcEndpointService('com.amazonaws.ap-northeast-1.emr-containers')
+    });
+    emrEndpoint.node.addDependency(this.vpc);
+
+    const storageEndpoint = new ec2.InterfaceVpcEndpoint(this, 'StorageEndpoint', {
+      vpc: this.vpc,
+      service: new ec2.InterfaceVpcEndpointService('com.amazonaws.ap-northeast-1.s3')
+    });
+    storageEndpoint.node.addDependency(this.vpc);
   }
 }
