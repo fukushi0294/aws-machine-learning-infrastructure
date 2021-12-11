@@ -19,8 +19,10 @@ export class CdkStack extends cdk.Stack {
     });
     compute.addDependency(network);
 
+    const emrStudioAdmin = this.node.tryGetContext('emr_studio_admin')
     const emrStudio = new EMRStudioStack(this, 'EMRWorkSpace', {
       vpc: network.vpc,
+      emrStudioAdmin
     });
     emrStudio.addDependency(network);
   }

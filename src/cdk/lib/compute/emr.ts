@@ -6,6 +6,7 @@ import * as iam from '@aws-cdk/aws-iam';
 
 interface EMRStudioStackProps extends cdk.NestedStackProps {
   vpc: ec2.IVpc
+  emrStudioAdmin: string
 }
 
 export class EMRStudioStack extends cdk.NestedStack {
@@ -33,7 +34,8 @@ export class EMRStudioStack extends cdk.NestedStack {
     engineSG.addIngressRule(workspaceSG, ec2.Port.tcp(18888), "allow ingress on port 18888 from ws");
 
     const emrStudioRole = this.initEmrStudioRole();
-    const emrUserRole = this.initEmrUserRole(emrStudioRole, bucket);
+    const emrStudionAdminPolicy = this.initEmrStudioPolicy(emrStudioRole, bucket);
+    const emrUserRole = this.initEmrUserRole(emrStudionAdminPolicy);
 
     const cfnStudio = new emr.CfnStudio(this, 'EMRStudio', {
       authMode: 'SSO',
@@ -45,6 +47,13 @@ export class EMRStudioStack extends cdk.NestedStack {
       vpcId: props.vpc.vpcId,
       workspaceSecurityGroupId: workspaceSG.securityGroupId,
       userRole: emrUserRole.roleArn,
+    });
+    
+    const cfnStudioSessionMapping = new emr.CfnStudioSessionMapping(this, 'EMRStudioSessionMapping', {
+      identityName: props.emrStudioAdmin,
+      identityType: 'USER',
+      sessionPolicyArn: emrStudionAdminPolicy.managedPolicyArn,
+      studioId: cfnStudio.attrStudioId,
     });
   }
 
@@ -104,95 +113,118 @@ export class EMRStudioStack extends cdk.NestedStack {
     return emrStudioRole;
   }
 
-  private initEmrUserRole(emrStudioRole: iam.Role, emrStudiobBucket: s3.IBucket): iam.Role {
-    const userRole = new iam.Role(this, "StudioUserRole", {
-      assumedBy: new iam.ServicePrincipal("elasticmapreduce.amazonaws.com")
-    });
+  private initEmrStudioPolicy(emrStudioRole: iam.Role, emrStudiobBucket: s3.IBucket) : iam.ManagedPolicy {
+    const policyDocument = iam.PolicyDocument.fromJson(
+      {
+        "Version": "2012-10-17T00:00:00.000Z",
+        "Statement": [
+          {
+            "Action": [
+              "elasticmapreduce:CreateEditor",
+              "elasticmapreduce:DescribeEditor",
+              "elasticmapreduce:ListEditors",
+              "elasticmapreduce:StartEditor",
+              "elasticmapreduce:StopEditor",
+              "elasticmapreduce:DeleteEditor",
+              "elasticmapreduce:OpenEditorInConsole",
+              "elasticmapreduce:AttachEditor",
+              "elasticmapreduce:DetachEditor",
+              "elasticmapreduce:CreateRepository",
+              "elasticmapreduce:DescribeRepository",
+              "elasticmapreduce:DeleteRepository",
+              "elasticmapreduce:ListRepositories",
+              "elasticmapreduce:LinkRepository",
+              "elasticmapreduce:UnlinkRepository",
+              "elasticmapreduce:DescribeCluster",
+              "elasticmapreduce:ListInstanceGroups",
+              "elasticmapreduce:ListBootstrapActions",
+              "elasticmapreduce:ListClusters",
+              "elasticmapreduce:ListSteps",
+              "elasticmapreduce:CreatePersistentAppUI",
+              "elasticmapreduce:DescribePersistentAppUI",
+              "elasticmapreduce:GetPersistentAppUIPresignedURL",
+              "secretsmanager:CreateSecret",
+              "secretsmanager:ListSecrets",
+              "emr-containers:DescribeVirtualCluster",
+              "emr-containers:ListVirtualClusters",
+              "emr-containers:DescribeManagedEndpoint",
+              "emr-containers:ListManagedEndpoints",
+              "emr-containers:CreateAccessTokenForManagedEndpoint",
+              "emr-containers:DescribeJobRun",
+              "emr-containers:ListJobRuns"
+            ],
+            "Resource": "*",
+            "Effect": "Allow",
+            "Sid": "AllowBasicActions"
+          },
+          {
+            "Action": [
+              "servicecatalog:DescribeProduct",
+              "servicecatalog:DescribeProductView",
+              "servicecatalog:DescribeProvisioningParameters",
+              "servicecatalog:ProvisionProduct",
+              "servicecatalog:SearchProducts",
+              "servicecatalog:UpdateProvisionedProduct",
+              "servicecatalog:ListProvisioningArtifacts",
+              "servicecatalog:DescribeRecord",
+              "cloudformation:DescribeStackResources"
+            ],
+            "Resource": "*",
+            "Effect": "Allow",
+            "Sid": "AllowIntermediateActions"
+          },
+          {
+            "Action": [
+              "elasticmapreduce:RunJobFlow"
+            ],
+            "Resource": "*",
+            "Effect": "Allow",
+            "Sid": "AllowAdvancedActions"
+          },
+          {
+            "Action": "iam:PassRole",
+            "Resource": [
+              emrStudioRole.roleArn,
+              `arn:aws:iam::${this.account}:role/EMR_DefaultRole`,
+              `arn:aws:iam::${this.account}:role/EMR_EC2_DefaultRole`
+            ],
+            "Effect": "Allow",
+            "Sid": "PassRolePermission"
+          },
+          {
+            "Action": [
+              "s3:ListAllMyBuckets",
+              "s3:ListBucket",
+              "s3:GetBucketLocation"
+            ],
+            "Resource": "arn:aws:s3:::*",
+            "Effect": "Allow",
+            "Sid": "S3ListPermission"
+          },
+          {
+            "Action": [
+              "s3:GetObject"
+            ],
+            "Resource": [
+              `arn:aws:s3:::${emrStudiobBucket.bucketName}/*`,
+              `arn:aws:s3:::aws-logs-${this.account}-${this.region}/elasticmapreduce/*`
+            ],
+            "Effect": "Allow",
+            "Sid": "S3GetObjectPermission"
+          }
+        ]
+      });
+      return new iam.ManagedPolicy(this, "EMRStudioAdminPolicy", {
+        document: policyDocument
+      });
+  }
 
-    userRole.addToPolicy(new iam.PolicyStatement({
-      actions: [
-        "elasticmapreduce:CreateEditor",
-        "elasticmapreduce:DescribeEditor",
-        "elasticmapreduce:ListEditors",
-        "elasticmapreduce:StartEditor",
-        "elasticmapreduce:StopEditor",
-        "elasticmapreduce:DeleteEditor",
-        "elasticmapreduce:OpenEditorInConsole",
-        "elasticmapreduce:AttachEditor",
-        "elasticmapreduce:DetachEditor",
-        "elasticmapreduce:CreateRepository",
-        "elasticmapreduce:DescribeRepository",
-        "elasticmapreduce:DeleteRepository",
-        "elasticmapreduce:ListRepositories",
-        "elasticmapreduce:LinkRepository",
-        "elasticmapreduce:UnlinkRepository",
-        "elasticmapreduce:DescribeCluster",
-        "elasticmapreduce:ListInstanceGroups",
-        "elasticmapreduce:ListBootstrapActions",
-        "elasticmapreduce:ListClusters",
-        "elasticmapreduce:ListSteps",
-        "elasticmapreduce:CreatePersistentAppUI",
-        "elasticmapreduce:DescribePersistentAppUI",
-        "elasticmapreduce:GetPersistentAppUIPresignedURL",
-        "secretsmanager:CreateSecret",
-        "secretsmanager:ListSecrets",
-        "emr-containers:DescribeVirtualCluster",
-        "emr-containers:ListVirtualClusters",
-        "emr-containers:DescribeManagedEndpoint",
-        "emr-containers:ListManagedEndpoints",
-        "emr-containers:CreateAccessTokenForManagedEndpoint",
-        "emr-containers:DescribeJobRun",
-        "emr-containers:ListJobRuns"
-      ],
-      resources: ["*"],
-      effect: iam.Effect.ALLOW
-    }));
-    userRole.addToPolicy(new iam.PolicyStatement({
-      resources: ["*"],
-      actions: [
-        "servicecatalog:DescribeProduct",
-        "servicecatalog:DescribeProductView",
-        "servicecatalog:DescribeProvisioningParameters",
-        "servicecatalog:ProvisionProduct",
-        "servicecatalog:SearchProducts",
-        "servicecatalog:UpdateProvisionedProduct",
-        "servicecatalog:ListProvisioningArtifacts",
-        "servicecatalog:DescribeRecord",
-        "cloudformation:DescribeStackResources"
-      ],
-      effect: iam.Effect.ALLOW
-    }));
-    userRole.addToPolicy(new iam.PolicyStatement({
-      resources:["*"],
-      actions: ["elasticmapreduce:RunJobFlow"],
-      effect: iam.Effect.ALLOW
-    }));
-    userRole.addToPolicy(new iam.PolicyStatement({
-      resources: [
-        emrStudioRole.roleArn,
-        `arn:aws:iam::${this.account}:role/EMR_DefaultRole`,
-        `arn:aws:iam::${this.account}:role/EMR_EC2_DefaultRole`
-      ],
-      actions:["iam:PassRole"],
-      effect:iam.Effect.ALLOW
-    }));
-    userRole.addToPolicy(new iam.PolicyStatement({
-      resources: ["arn:aws:s3:::*"],
-      actions: [
-        "s3:ListAllMyBuckets",
-        "s3:ListBucket",
-        "s3:GetBucketLocation"
-      ],
-      effect: iam.Effect.ALLOW
-    }));
-    userRole.addToPolicy(new iam.PolicyStatement({
-      resources: [
-        `arn:aws:s3:::${emrStudiobBucket.bucketName}/*`,
-        `arn:aws:s3:::aws-logs-${this.account}-${this.region}/elasticmapreduce/*`
-      ],
-      actions: ["s3:GetObject"],
-      effect: iam.Effect.ALLOW
-    }));
+  private initEmrUserRole(emrUserPolicy: iam.ManagedPolicy): iam.Role {
+    const userRole = new iam.Role(this, "StudioUserRole", {
+      assumedBy: new iam.ServicePrincipal("elasticmapreduce.amazonaws.com"),
+      
+    });
+    userRole.addManagedPolicy(emrUserPolicy)
     return userRole;
   }
 }

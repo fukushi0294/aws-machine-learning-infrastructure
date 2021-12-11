@@ -1,3 +1,4 @@
 {
-  "eks_admin":  ["fuku"]
+  "eks_admin":  ["fuku"],
+  "emr_studio_admin" : "emr-engineer"
 }
