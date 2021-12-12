@@ -3,9 +3,6 @@ import * as emr from '@aws-cdk/aws-emr';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as s3 from '@aws-cdk/aws-s3';
 import * as iam from '@aws-cdk/aws-iam';
-import * as acm from '@aws-cdk/aws-certificatemanager';
-import * as route53 from '@aws-cdk/aws-route53';
-import * as ssm from '@aws-cdk/aws-ssm';
 
 interface EMRStudioStackProps extends cdk.NestedStackProps {
   vpc: ec2.IVpc
@@ -58,21 +55,6 @@ export class EMRStudioStack extends cdk.NestedStack {
       sessionPolicyArn: emrStudionAdminPolicy.managedPolicyArn,
       studioId: cfnStudio.attrStudioId,
     });
-
-    const zoneName = ssm.StringParameter.fromStringParameterAttributes(this, 'MainDomain', {
-      parameterName: '/Main/Domain',
-    }).stringValue;
-
-    const myHostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName
-    });
-    const cert = new acm.Certificate(this, 'Certificate', {
-      domainName: `spark-studio.${zoneName}`,
-      validation: acm.CertificateValidation.fromDns(myHostedZone),
-    });
-
-    
-    
   }
 
   private initEmrStudioRole(): iam.Role {

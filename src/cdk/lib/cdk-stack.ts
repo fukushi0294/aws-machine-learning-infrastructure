@@ -2,6 +2,7 @@ import * as cdk from '@aws-cdk/core';
 import { NetworkStack } from './network';
 import { ComputeStack } from './compute/cluster';
 import { EMRStudioStack } from './compute/emr-studio';
+import { EMRClusterEndpointStack } from './compute/endpoint';
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -25,5 +26,12 @@ export class CdkStack extends cdk.Stack {
       emrStudioAdmin
     });
     emrStudio.addDependency(network);
+
+    const emrStudioEndpoint = new EMRClusterEndpointStack(this, 'EMRClusterEndpoint', {
+      virtualCluster: compute.emrVirtualCluster,
+      executionRole: compute.sparkExecutionJobRole,
+    });
+    emrStudioEndpoint.addDependency(compute);
+    emrStudioEndpoint.addDependency(emrStudio);
   }
 }
