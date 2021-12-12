@@ -18,7 +18,7 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
     const domainName = ssm.StringParameter.fromStringParameterAttributes(this, 'MainDomain', {
       parameterName: '/Main/Domain',
     }).stringValue;
-    const zoneId = ssm.StringParameter.fromStringParameterAttributes(this, 'MainDomain', {
+    const zoneId = ssm.StringParameter.fromStringParameterAttributes(this, 'MainDomainZoneId', {
       parameterName: '/Main/ZONE_ID',
     }).stringValue;
 
@@ -36,7 +36,7 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
             certificateArn: cert.certificateArn,
             executionRoleArn: props.executionRole.roleArn,
             name: "emr-endpoint-eks-spark",
-            releaseLabel: "emr-6.2.0-latest",
+            releaseLabel: "emr-6.4.0-latest",
             type: "JUPYTER_ENTERPRISE_GATEWAY",
             virtualClusterId: props.virtualCluster.attrId,
         },
