@@ -28,6 +28,27 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
       validation: acm.CertificateValidation.fromDns(myHostedZone),
     });
 
+    const customResourceManagedPolicy = new iam.ManagedPolicy(this, "EMR_on_EKS_security_group",{
+      document: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: [
+              "ec2:CreateSecurityGroup",
+              "ec2:RevokeSecurityGroupEgress",
+              "ec2:CreateSecurityGroup",
+              "ec2:DeleteSecurityGroup",
+              "ec2:AuthorizeSecurityGroupEgress",
+              "ec2:AuthorizeSecurityGroupIngress",
+              "ec2:RevokeSecurityGroupIngress",
+              "ec2:DeleteSecurityGroup"
+            ],
+            resources: ["*"]
+          })
+        ]
+      }) 
+    });
+
     const endpoint = new cr.AwsCustomResource(this, "CreateEndpoint", {
       onCreate: {
         service: "EMRcontainers",
@@ -35,14 +56,30 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
         parameters: {
             certificateArn: cert.certificateArn,
             executionRoleArn: props.executionRole.roleArn,
-            name: "emr-endpoint-eks-spark",
+            name: "spark",
             releaseLabel: "emr-6.4.0-latest",
             type: "JUPYTER_ENTERPRISE_GATEWAY",
             virtualClusterId: props.virtualCluster.attrId,
         },
         physicalResourceId: cr.PhysicalResourceId.fromResponse("arn"),
       },
+      onDelete: {
+        service: "EMRcontainers",
+        action: "deleteManagedEndpoint",
+        parameters: {
+            id: new cr.PhysicalResourceIdReference(),
+            virtualClusterId: props.virtualCluster.attrId,
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse("arn"),
+      },
       functionName: "CreateEpFn",
+      role: new iam.Role(this, 'CreateManagedEndpointLambdaRole', {
+          assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+          managedPolicies : [
+            iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+            customResourceManagedPolicy
+          ]
+        }), 
       policy: cr.AwsCustomResourcePolicy.fromSdkCalls({resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE})
     })
     endpoint.node.addDependency(cert);

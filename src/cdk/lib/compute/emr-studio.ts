@@ -33,11 +33,7 @@ export class EMRStudioStack extends cdk.NestedStack {
     workspaceSG.addEgressRule(engineSG, ec2.Port.tcp(18888), "allow egress on port 18888 to eng");
     engineSG.addIngressRule(workspaceSG, ec2.Port.tcp(18888), "allow ingress on port 18888 from ws");
 
-    // cdk.Tags.of(engineSG).add("for-use-with-amazon-emr-managed-policies", "true");
-    // cdk.Tags.of(workspaceSG).add("for-use-with-amazon-emr-managed-policies", "true");
-
     const emrStudioRole = this.initEmrStudioRole();
-    // cdk.Tags.of(emrStudioRole).add("for-use-with-amazon-emr-managed-policies", "true");
     const emrStudionAdminPolicy = this.initEmrStudioPolicy(emrStudioRole, bucket);
     const emrUserRole = this.initEmrUserRole(emrStudionAdminPolicy);
 
