@@ -25,6 +25,9 @@ export class ComputeStack extends cdk.NestedStack {
           vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_NAT }],
           defaultCapacity: 2,
           defaultCapacityInstance: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
+          albController: {
+            version: eks.AlbControllerVersion.V2_3_0,
+          },
       }
     );
 

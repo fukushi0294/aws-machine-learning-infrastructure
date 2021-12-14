@@ -60,56 +60,37 @@ export class EMRStudioStack extends cdk.NestedStack {
   private initEmrStudioRole(): iam.Role {
     const emrStudioRole = new iam.Role(this, "StudioRole", {
       assumedBy: new iam.ServicePrincipal("elasticmapreduce.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonS3FullAccess")
+      ]
     });
     emrStudioRole.addToPolicy(new iam.PolicyStatement({
       resources: ["*"],
       effect: iam.Effect.ALLOW,
       actions: [
-          "ec2:AuthorizeSecurityGroupEgress",
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:CreateSecurityGroup",
-          "ec2:DescribeSecurityGroups",
-          "ec2:RevokeSecurityGroupEgress",
-          "ec2:CreateNetworkInterface",
-          "ec2:CreateNetworkInterfacePermission",
-          "ec2:DeleteNetworkInterface",
-          "ec2:DeleteNetworkInterfacePermission",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:ModifyNetworkInterfaceAttribute",
-          "ec2:DescribeTags",
-          "ec2:DescribeInstances",
-          "ec2:DescribeSubnets",
-          "ec2:DescribeVpcs",
-          "elasticmapreduce:ListInstances",
-          "elasticmapreduce:DescribeCluster",
-          "elasticmapreduce:ListSteps"
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateTags",
+        "ec2:DescribeSecurityGroups",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:CreateNetworkInterface",
+        "ec2:CreateNetworkInterfacePermission",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DeleteNetworkInterfacePermission",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:ModifyNetworkInterfaceAttribute",
+        "ec2:DescribeTags",
+        "ec2:DescribeInstances",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "elasticmapreduce:ListInstances",
+        "elasticmapreduce:DescribeCluster",
+        "elasticmapreduce:ListSteps"
         ]
       })
     );
-    emrStudioRole.addToPolicy(new iam.PolicyStatement({
-      resources: ["arn:aws:ec2:*:*:network-interface/*"],
-      actions: ["ec2:CreateTags"],
-      effect: iam.Effect.ALLOW,
-      conditions: {"ForAllValues:StringEquals": {
-        "aws:TagKeys": ["aws:elasticmapreduce:editor-id","aws:elasticmapreduce:job-flow-id"]
-      }}
-    }));
-    emrStudioRole.addToPolicy(new iam.PolicyStatement({
-      resources: ["arn:aws:s3:::*"],
-      actions: [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:GetEncryptionConfiguration",
-        "s3:ListBucket",
-        "s3:DeleteObject"
-      ],
-      effect: iam.Effect.ALLOW
-    }));
-    emrStudioRole.addToPolicy(new iam.PolicyStatement({
-        resources: ["arn:aws:secretsmanager:*:*:secret:*"],
-        actions: ["secretsmanager:GetSecretValue"],
-        effect: iam.Effect.ALLOW
-    }));
     return emrStudioRole;
   }
 
