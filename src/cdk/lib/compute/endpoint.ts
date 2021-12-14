@@ -49,6 +49,13 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
       }) 
     });
 
+    const customResourceRole = new iam.Role(this, 'CreateManagedEndpointLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies : [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+        customResourceManagedPolicy
+      ]
+    });
     const endpoint = new cr.AwsCustomResource(this, "CreateEndpoint", {
       onCreate: {
         service: "EMRcontainers",
@@ -63,25 +70,23 @@ export class EMRClusterEndpointStack extends cdk.NestedStack {
         },
         physicalResourceId: cr.PhysicalResourceId.fromResponse("arn"),
       },
+      functionName: "CreateEpFn",
+      role: customResourceRole,
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE})
+    });
+    endpoint.node.addDependency(cert);
+    const onDelete = new cr.AwsCustomResource(this, "DeleteEndpoint", {
       onDelete: {
         service: "EMRcontainers",
         action: "deleteManagedEndpoint",
         parameters: {
-            id: new cr.PhysicalResourceIdReference(),
+            id: endpoint.getResponseField("id"),
             virtualClusterId: props.virtualCluster.attrId,
         },
-        physicalResourceId: cr.PhysicalResourceId.fromResponse("arn"),
       },
       functionName: "CreateEpFn",
-      role: new iam.Role(this, 'CreateManagedEndpointLambdaRole', {
-          assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-          managedPolicies : [
-            iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
-            customResourceManagedPolicy
-          ]
-        }), 
+      role: customResourceRole,
       policy: cr.AwsCustomResourcePolicy.fromSdkCalls({resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE})
-    })
-    endpoint.node.addDependency(cert);
+    });
   }
 }
